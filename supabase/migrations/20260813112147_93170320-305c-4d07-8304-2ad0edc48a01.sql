@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.match_chunks(extensions.vector(1536), int) FROM anon, authenticated;
