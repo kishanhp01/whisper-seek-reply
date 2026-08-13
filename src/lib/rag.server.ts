@@ -1,6 +1,6 @@
-const GATEWAY = "https://ai.gateway.lovable.dev/v1";
-const EMBEDDING_MODEL = "openai/text-embedding-3-small"; // 1536 dims
-const CHAT_MODEL = "google/gemini-3.6-flash";
+const OPENAI = "https://api.openai.com/v1";
+const EMBEDDING_MODEL = "text-embedding-3-small"; // 1536 dims
+const CHAT_MODEL = "gpt-4o-mini";
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
