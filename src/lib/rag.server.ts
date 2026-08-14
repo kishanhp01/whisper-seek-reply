@@ -7,7 +7,7 @@ export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Turn raw provider errors into short, user-safe messages. */
 export function friendlyError(message: string): string {
   if (/insufficient_quota/.test(message))
-    return "The OpenAI account for OPENAI_API_KEY has no remaining quota — add billing credit or use a different key.";
+    return "OpenAI API quota is unavailable. Please add API billing/credits.";
   if (/OpenAI \w+ 401/.test(message)) return "OPENAI_API_KEY was rejected by OpenAI (invalid key).";
   if (/OpenAI \w+ 429/.test(message)) return "OpenAI rate limit reached — please try again in a moment.";
   if (/Sarvam/.test(message)) return "Speech-to-text failed — please try recording again.";
