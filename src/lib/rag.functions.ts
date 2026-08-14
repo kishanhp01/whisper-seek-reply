@@ -55,7 +55,8 @@ export const ingestCorpus = createServerFn({ method: "POST" }).handler(async () 
       if (error) throw new Error(error.message);
       chunksCreated += batch.length;
     } catch (error) {
-      errors.push((error as Error).message);
+      const { friendlyError } = await import("./rag.server");
+      errors.push(friendlyError((error as Error).message));
     }
     // Small pause keeps the embeddings API from rate-limiting the batch loop.
     await sleep(250);
@@ -80,7 +81,8 @@ export const speechToText = createServerFn({ method: "POST" })
       return { transcript: await transcribe(data.audioBase64), error: null };
     } catch (error) {
       console.error("[stt]", error);
-      return { transcript: "", error: (error as Error).message };
+      const { friendlyError } = await import("./rag.server");
+      return { transcript: "", error: friendlyError((error as Error).message) };
     }
   });
 
@@ -91,7 +93,7 @@ export const ragAnswer = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { embedTexts, generateAnswer } = await import("./rag.server");
+    const { embedTexts, generateAnswer, friendlyError } = await import("./rag.server");
 
     const started = Date.now();
     let errorHint: string | null = null;
@@ -148,7 +150,7 @@ export const ragAnswer = createServerFn({ method: "POST" })
         answer: "",
         sources: [] as string[],
         latency: null,
-        error: (error as Error).message,
+        error: friendlyError((error as Error).message),
       };
     }
   });
