@@ -20,14 +20,17 @@ export async function withRetry<T>(fn: () => Promise<T>, label: string): Promise
 }
 
 function aiKey(): string {
-  const key = process.env["LOVABLE_API_KEY"];
-  if (!key) throw new Error("Missing LOVABLE_API_KEY");
+  const key = process.env["OPENAI_API_KEY"];
+  if (!key)
+    throw new Error(
+      "OPENAI_API_KEY is not configured. Add it to your Lovable Secrets to enable embeddings and answers.",
+    );
   return key;
 }
 
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   return withRetry(async () => {
-    const res = await fetch(`${GATEWAY}/embeddings`, {
+    const res = await fetch(`${OPENAI}/embeddings`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${aiKey()}`,
@@ -35,7 +38,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
       },
       body: JSON.stringify({ model: EMBEDDING_MODEL, input: texts }),
     });
-    if (!res.ok) throw new Error(`embeddings ${res.status}: ${await res.text()}`);
+    if (!res.ok) throw new Error(`OpenAI embeddings ${res.status}: ${await res.text()}`);
     const json = (await res.json()) as { data: { embedding: number[] }[] };
     return json.data.map((d) => d.embedding);
   }, "embedding");
@@ -43,7 +46,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
 
 export async function generateAnswer(query: string, context: string[]): Promise<string> {
   return withRetry(async () => {
-    const res = await fetch(`${GATEWAY}/chat/completions`, {
+    const res = await fetch(`${OPENAI}/chat/completions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${aiKey()}`,
@@ -64,7 +67,7 @@ export async function generateAnswer(query: string, context: string[]): Promise<
         ],
       }),
     });
-    if (!res.ok) throw new Error(`chat ${res.status}: ${await res.text()}`);
+    if (!res.ok) throw new Error(`OpenAI chat ${res.status}: ${await res.text()}`);
     const json = (await res.json()) as { choices: { message: { content: string } }[] };
     return json.choices[0]?.message?.content ?? "";
   }, "generation");
