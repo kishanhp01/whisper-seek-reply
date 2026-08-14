@@ -38,21 +38,46 @@ function Index() {
   const [busy, setBusy] = useState<string | null>(null);
   const [transcript, setTranscript] = useState("");
   const [answer, setAnswer] = useState("");
-  const [totalMs, setTotalMs] = useState<number | null>(null);
+  const [sources, setSources] = useState<string[]>([]);
+  const [latency, setLatency] = useState<{
+    total_ms: number;
+    stt_ms: number;
+    embedding_ms: number;
+    retrieval_ms: number;
+    generation_ms: number;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleLoad() {
     setLoading(true);
-    setLoadStatus("Loading dataset and building embeddings…");
+    setLoadStatus("Loading dataset…");
+    const stages = [
+      "Fetching Hugging Face rows…",
+      "Creating embeddings…",
+      "Storing vectors…",
+    ];
+    let stage = 0;
+    const timer = setInterval(() => {
+      if (stage < stages.length) setLoadStatus(stages[stage++]!);
+    }, 2500);
     try {
       const result = await ingest();
-      setLoadStatus(
-        `Loaded ${result.chunks_created} chunks from ${result.rows_fetched} rows` +
-          (result.errors.length ? ` (${result.errors.length} errors)` : ""),
-      );
+      if (result.already_loaded) {
+        setLoadStatus(`Already loaded ${result.chunks_created} chunks`);
+      } else if (result.chunks_created > 0) {
+        setLoadStatus(
+          `Loaded ${result.chunks_created} chunks` +
+            (result.errors.length ? ` (${result.errors.length} errors)` : ""),
+        );
+      } else {
+        setLoadStatus(
+          `Failed to load dataset: ${result.errors[0] ?? "no passages found"}`,
+        );
+      }
     } catch (e) {
-      setLoadStatus(`Failed: ${(e as Error).message}`);
+      setLoadStatus(`Failed to load dataset: ${(e as Error).message}`);
     } finally {
+      clearInterval(timer);
       setLoading(false);
     }
   }
@@ -79,7 +104,8 @@ function Index() {
         });
         if (result.error) throw new Error(result.error);
         setAnswer(result.answer);
-        setTotalMs(result.latency?.total_ms ?? null);
+        setSources(result.sources);
+        setLatency(result.latency);
       } catch (e) {
         setError((e as Error).message);
       } finally {
@@ -91,7 +117,8 @@ function Index() {
     try {
       setTranscript("");
       setAnswer("");
-      setTotalMs(null);
+      setSources([]);
+      setLatency(null);
       setRecorder(await startRecording());
     } catch {
       setError("Microphone access is needed to record.");
@@ -161,9 +188,33 @@ function Index() {
               Answer
             </p>
             <p className="mt-1 text-sm leading-relaxed">{answer}</p>
-            {totalMs !== null && (
-              <p className="mt-3 text-xs text-muted-foreground">{Math.round(totalMs)} ms total</p>
-            )}
+          </div>
+        )}
+
+        {sources.length > 0 && (
+          <div className="w-full rounded-md border border-border p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Sources
+            </p>
+            <ul className="mt-2 space-y-2">
+              {sources.map((s, i) => (
+                <li key={i} className="text-xs leading-relaxed text-muted-foreground">
+                  • {s}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {latency && (
+          <div className="w-full rounded-md bg-muted p-4 text-xs text-muted-foreground">
+            <p className="font-medium uppercase tracking-wide">Latency</p>
+            <p className="mt-1">Total: {Math.round(latency.total_ms)} ms</p>
+            <p>
+              STT {Math.round(latency.stt_ms)} ms · embed {Math.round(latency.embedding_ms)} ms ·
+              retrieval {Math.round(latency.retrieval_ms)} ms · generation{" "}
+              {Math.round(latency.generation_ms)} ms
+            </p>
           </div>
         )}
       </section>

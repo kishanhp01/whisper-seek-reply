@@ -7,11 +7,23 @@ export const ingestCorpus = createServerFn({ method: "POST" }).handler(async () 
   );
 
   const errors: string[] = [];
+
+  // Prevent accidental duplicate ingestion: skip when the corpus is already loaded.
+  const { count: existing, error: countError } = await supabaseAdmin
+    .from("chunks")
+    .select("id", { count: "exact", head: true });
+  if (countError) {
+    return { rows_fetched: 0, chunks_created: 0, already_loaded: false, errors: [countError.message] };
+  }
+  if ((existing ?? 0) > 0) {
+    return { rows_fetched: 0, chunks_created: existing ?? 0, already_loaded: true, errors };
+  }
+
   const { rows, errors: fetchErrors } = await fetchDatasetRows();
   errors.push(...fetchErrors);
 
   if (rows.length === 0) {
-    return { rows_fetched: 0, chunks_created: 0, errors };
+    return { rows_fetched: 0, chunks_created: 0, already_loaded: false, errors };
   }
 
   type Pending = { text: string; source_doc_id: string };
@@ -49,7 +61,12 @@ export const ingestCorpus = createServerFn({ method: "POST" }).handler(async () 
     await sleep(250);
   }
 
-  return { rows_fetched: rows.length, chunks_created: chunksCreated, errors };
+  return {
+    rows_fetched: rows.length,
+    chunks_created: chunksCreated,
+    already_loaded: false,
+    errors,
+  };
 });
 
 export const speechToText = createServerFn({ method: "POST" })
@@ -77,9 +94,13 @@ export const ragAnswer = createServerFn({ method: "POST" })
     const { embedTexts, generateAnswer } = await import("./rag.server");
 
     const started = Date.now();
+    let errorHint: string | null = null;
     try {
-      const retrievalStart = Date.now();
+      const embeddingStart = Date.now();
       const [queryEmbedding] = await embedTexts([data.query]);
+      const embeddingMs = Date.now() - embeddingStart;
+
+      const retrievalStart = Date.now();
       const { data: matches, error } = await supabaseAdmin.rpc("match_chunks", {
         query_embedding: JSON.stringify(queryEmbedding),
         match_count: 5,
@@ -88,6 +109,9 @@ export const ragAnswer = createServerFn({ method: "POST" })
       const retrievalMs = Date.now() - retrievalStart;
 
       const sources = (matches ?? []).map((m: { text: string }) => m.text);
+      if (sources.length === 0) {
+        errorHint = "No passages found — click Load Data first.";
+      }
 
       const generationStart = Date.now();
       const answer = sources.length
@@ -111,11 +135,12 @@ export const ragAnswer = createServerFn({ method: "POST" })
         sources,
         latency: {
           stt_ms: sttMs,
+          embedding_ms: embeddingMs,
           retrieval_ms: retrievalMs,
           generation_ms: generationMs,
           total_ms: totalMs,
         },
-        error: null,
+        error: errorHint,
       };
     } catch (error) {
       console.error("[rag-answer]", error);
